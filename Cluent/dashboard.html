@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartMeter | Личный кабинет</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-microchip"></i>
+                    <span>Smart<span>Meter</span></span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <i class="fas fa-chart-line"></i> <span>Дашборд</span>
+                </a>
+                <a href="#" class="nav-item" data-page="devices">
+                    <i class="fas fa-microchip"></i> <span>Мои устройства</span>
+                </a>
+                <a href="#" class="nav-item" data-page="addresses">
+                    <i class="fas fa-map-marker-alt"></i> <span>Мои адреса</span>
+                </a>
+                <a href="#" class="nav-item" data-page="statistics">
+                    <i class="fas fa-chart-simple"></i> <span>Статистика</span>
+                </a>
+                <a href="#" class="nav-item" data-page="commands">
+                    <i class="fas fa-terminal"></i> <span>Управление</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="userName">Пользователь</span>
+                </div>
+                <button id="logoutBtn" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> <span>Выйти</span>
+                </button>
+                <a href="index.html" class="home-link">
+                    <i class="fas fa-home"></i> <span>На главную</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="main-header">
+                <h1 id="pageTitle">Дашборд</h1>
+                <div class="header-actions">
+                    <div class="date-range">
+                        <input type="date" id="dateFrom">
+                        <span>—</span>
+                        <input type="date" id="dateTo">
+                        <button id="updateStats" class="btn-secondary">
+                            <i class="fas fa-rotate-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard Page -->
+            <div id="dashboardPage" class="page active">
+                <!-- Выбор адреса -->
+                <div class="address-selector" id="addressSelector" style="margin-bottom: 20px; display: none;">
+                    <label>Выберите адрес:</label>
+                    <select id="addressSelect" class="address-select">
+                        <option value="">-- Выберите адрес --</option>
+                    </select>
+                </div>
+                
+                <!-- Сообщение об отсутствии адресов -->
+                <div id="noAddressMessage" class="empty-message" style="display: none; text-align: center; padding: 40px;">
+                    <i class="fas fa-map-marker-alt" style="font-size: 48px; color: #667eea; margin-bottom: 15px;"></i>
+                    <h3>У вас ещё нет добавленных адресов</h3>
+                    <p>Перейдите в раздел "Мои адреса" и добавьте адрес, где установлены счётчики</p>
+                    <button class="btn-primary" onclick="document.getElementById('addAddressBtn').click()" style="margin-top: 15px;">
+                        <i class="fas fa-plus"></i> Добавить адрес
+                    </button>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-icon"><i class="fas fa-bolt"></i></div><div class="stat-info"><h3>Электричество</h3><p id="electricityTotal" class="stat-value">—</p><span>кВт·ч</span></div></div>
+                    <div class="stat-card"><div class="stat-icon"><i class="fas fa-water"></i></div><div class="stat-info"><h3>Горячая вода</h3><p id="hotWaterTotal" class="stat-value">—</p><span>м³</span></div></div>
+                    <div class="stat-card"><div class="stat-icon"><i class="fas fa-snowflake"></i></div><div class="stat-info"><h3>Холодная вода</h3><p id="coldWaterTotal" class="stat-value">—</p><span>м³</span></div></div>
+                    <div class="stat-card"><div class="stat-icon"><i class="fas fa-fire"></i></div><div class="stat-info"><h3>Тепло</h3><p id="heatTotal" class="stat-value">—</p><span>Гкал</span></div></div>
+                </div>
+                
+                <div class="charts-row">
+                    <div class="chart-card"><h3>Динамика потребления</h3><canvas id="consumptionChart"></canvas></div>
+                    <div class="chart-card"><h3>Распределение по типам</h3><canvas id="distributionChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Devices Page -->
+            <div id="devicesPage" class="page">
+                <div class="page-header"><h2>Мои устройства</h2></div>
+                <div id="devicesList" class="devices-list"></div>
+            </div>
+
+            <!-- Addresses Page -->
+            <div id="addressesPage" class="page">
+                <div class="page-header"><h2>Мои адреса</h2><button id="addAddressBtn" class="btn-primary"><i class="fas fa-plus"></i> Добавить адрес</button></div>
+                <div id="addressesList" class="addresses-list"></div>
+            </div>
+
+            <!-- Statistics Page -->
+            <div id="statisticsPage" class="page">
+                <div class="stats-controls">
+                    <select id="statType">
+                        <option value="country">По городам</option>
+                        <option value="city">По улицам</option>
+                        <option value="street">По домам</option>
+                    </select>
+                    <select id="counterType">
+                        <option value="Электричество">Электричество</option>
+                        <option value="Горячая вода">Горячая вода</option>
+                        <option value="Холодная вода">Холодная вода</option>
+                        <option value="Тепло">Тепло</option>
+                    </select>
+                    <button id="loadStats" class="btn-primary">Загрузить</button>
+                </div>
+                <div id="statsTableContainer"><table class="stats-table"><thead><tr><th>Название</th><th>Сумма</th><th>Среднее</th><th>Кол-во</th></tr></thead><tbody id="statsTableBody"></tbody></table></div>
+            </div>
+
+            <!-- Commands Page -->
+            <div id="commandsPage" class="page">
+                <div class="command-form">
+                    <div class="form-group"><label>ID счётчика</label><input type="number" id="commandCounterId" placeholder="Введите ID счётчика"></div>
+                    <div class="form-group"><label>Действие</label><select id="commandAction"><option value="on">Включить</option><option value="off">Выключить</option></select></div>
+                    <button id="sendCommandBtn" class="btn-primary"><i class="fas fa-paper-plane"></i> Отправить команду</button>
+                </div>
+                <div id="commandResult" class="command-result"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Модальные окна -->
+    <div id="deviceModal" class="modal"><div class="modal-content"><span class="close">&times;</span><h3>Добавить устройство</h3><form id="addDeviceForm"><div class="form-group"><label>ID счётчика</label><input type="number" name="id_counter" required></div><div class="form-group"><label>Тип</label><select name="type"><option value="Электричество">Электричество</option><option value="Горячая вода">Горячая вода</option><option value="Холодная вода">Холодная вода</option><option value="Тепло">Тепло</option></select></div><div class="form-group"><label>Дата установки</label><input type="date" name="duration" required></div><div class="form-group"><label>Город</label><input type="text" name="city" required></div><div class="form-group"><label>Улица</label><input type="text" name="street" required></div><div class="form-group"><label>Дом</label><input type="text" name="house" required></div><div class="form-group"><label>Квартира</label><input type="number" name="flat" required></div><button type="submit" class="btn-primary">Сохранить</button></form></div></div>
+
+    <div id="addressModal" class="modal"><div class="modal-content"><span class="close">&times;</span><h3>Добавить адрес</h3><form id="addAddressForm"><div class="form-group"><label>Город</label><input type="text" name="city" required></div><div class="form-group"><label>Улица</label><input type="text" name="street" required></div><div class="form-group"><label>Дом</label><input type="text" name="house" required></div><div class="form-group"><label>Квартира</label><input type="number" name="flat" required></div><button type="submit" class="btn-primary">Сохранить</button></form></div></div>
+
+    <script src="js/api.js"></script>
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
