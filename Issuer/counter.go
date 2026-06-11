@@ -44,10 +44,15 @@ type Message struct {
 	Data json.RawMessage `json:"data"`
 }
 
+type CounterState struct {
+	Counters map[int]int `json:"counters"`
+}
+
 var (
 	rng           = rand.New(rand.NewSource(time.Now().UnixNano()))
 	stoppedDivise = make(map[int]bool)
 	mu            sync.RWMutex
+	fileMutex     sync.Mutex
 )
 
 func getModuleID(n int) int {
@@ -64,13 +69,69 @@ func getModuleID(n int) int {
 	file, _ := os.Create(name)
 	file.WriteString(strconv.Itoa(n))
 	return n
+}
 
+func saveCounterState(moduleId int, values map[int]int) {
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
+
+	filename := fmt.Sprintf("module%d_state.json", moduleId)
+	existingState := make(map[int]int)
+	if data, err := os.ReadFile(filename); err == nil {
+		var state CounterState
+		if json.Unmarshal(data, &state) == nil && state.Counters != nil {
+			existingState = state.Counters
+		}
+	}
+
+	for k, v := range values {
+		existingState[k] = v
+	}
+
+	data, err := json.MarshalIndent(CounterState{Counters: existingState}, "", "  ")
+	if err != nil {
+		log.Printf("Ошибка сериализации состояния: %v", err)
+		return
+	}
+	err = os.WriteFile(filename, data, 0644)
+	if err != nil {
+		log.Printf("Ошибка сохранения состояния в файл %s: %v", filename, err)
+	} else {
+		log.Printf("Состояние счётчиков сохранено в %s", filename)
+	}
+}
+
+func loadCounterState(moduleId int, deviceIds []int) map[int]int {
+	filename := fmt.Sprintf("module%d_state.json", moduleId)
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		log.Printf("Файл состояния %s не найден, начинаем с нуля", filename)
+		return make(map[int]int)
+	}
+
+	var state CounterState
+	if err := json.Unmarshal(data, &state); err != nil {
+		log.Printf("Ошибка парсинга файла состояния %s: %v", filename, err)
+		return make(map[int]int)
+	}
+
+	result := state.Counters
+	if result == nil {
+		result = make(map[int]int)
+	}
+	for _, id := range deviceIds {
+		if _, exists := result[id]; !exists {
+			result[id] = 0
+			log.Printf("Счётчик %d не найден в сохранённом состоянии, инициализирован нулём", id)
+		}
+	}
+	log.Printf("Состояние счётчиков загружено из %s", filename)
+	return result
 }
 
 func parseNumbers(s string) ([]int, error) {
 	parts := strings.Fields(s)
 	nums := make([]int, 0, len(parts))
-
 	for _, part := range parts {
 		n, err := strconv.Atoi(part)
 		if err != nil {
@@ -101,7 +162,6 @@ func createMessage(typeMessage string, data interface{}) ([]byte, error) {
 		Type: typeMessage,
 		Data: d,
 	}
-
 	msg, err := json.Marshal(message)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка маршалинга: %w", err)
@@ -109,47 +169,70 @@ func createMessage(typeMessage string, data interface{}) ([]byte, error) {
 	return msg, nil
 }
 
-func writeOnServer(conn net.Conn, control <-chan Control) {
-	for c := range control {
-		str, err := createMessage("control", c)
-		if err != nil {
-			log.Println(err)
-			continue
+func writeOnServer(conn net.Conn, control <-chan Control, done <-chan struct{}, disconnect chan<- struct{}) {
+	for {
+		select {
+		case <-done:
+			return
+		case c, ok := <-control:
+			if !ok {
+				return
+			}
+			str, err := createMessage("control", c)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			_, err = conn.Write(append(str, '\n'))
+			if err != nil {
+				log.Printf("Ошибка записи: %v", err)
+				select {
+				case disconnect <- struct{}{}:
+				default:
+				}
+				return
+			}
+			time.Sleep(time.Millisecond * 50)
 		}
-		_, err = conn.Write(append(str, '\n'))
-		if err != nil {
-			log.Printf("Ошибка записи: %v", err)
-			continue
-		}
-		time.Sleep(time.Millisecond * 50)
 	}
 }
 
-func readOnServer(conn net.Conn) {
+func readOnServer(conn net.Conn, done <-chan struct{}, disconnect chan<- struct{}) {
 	reader := bufio.NewReader(conn)
-
 	for {
-		line, err := reader.ReadBytes('\n')
-		if err != nil {
-			log.Println("Ошибка чтения: ", err)
-			continue
-		}
-
-		var command Commands
-		if err := json.Unmarshal(line, &command); err != nil {
-			log.Println("Ошибка преобразования: ", err)
-			continue
-		}
-		handleCommand(command)
-		result := Result{
-			IdCommand: command.IdCommand,
-			Status:    "executed",
-		}
-		mes, err := createMessage("result", result)
-		_, err = conn.Write(append(mes, '\n'))
-		if err != nil {
-			log.Printf("Ошибка записи: %v", err)
-			continue
+		select {
+		case <-done:
+			return
+		default:
+			line, err := reader.ReadBytes('\n')
+			if err != nil {
+				log.Println("Ошибка чтения, соединение разорвано:", err)
+				select {
+				case disconnect <- struct{}{}:
+				default:
+				}
+				return
+			}
+			var command Commands
+			if err := json.Unmarshal(line, &command); err != nil {
+				log.Println("Ошибка преобразования:", err)
+				continue
+			}
+			handleCommand(command)
+			result := Result{
+				IdCommand: command.IdCommand,
+				Status:    "executed",
+			}
+			mes, err := createMessage("result", result)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			_, err = conn.Write(append(mes, '\n'))
+			if err != nil {
+				log.Printf("Ошибка записи: %v", err)
+				return
+			}
 		}
 	}
 }
@@ -158,99 +241,155 @@ func randomInt(min, max int) int {
 	return rng.Intn(max-min+1) + min
 }
 
-func isStopped(deviseId int) bool {
+func isStopped(deviceId int) bool {
 	mu.RLock()
 	defer mu.RUnlock()
-	return stoppedDivise[deviseId]
+	return stoppedDivise[deviceId]
 }
 
-func counter(id int, message chan Control) {
-	value := 0
+func counter(id, moduleId int, message chan Control, currentValue int, done <-chan struct{}) {
+	value := currentValue
 	for {
-		if isStopped(id) {
-			time.Sleep(time.Minute)
+		select {
+		case <-done:
+			return
+		default:
+			if isStopped(id) {
+				time.Sleep(time.Minute)
+				continue
+			}
+			value += randomInt(100, 120)
+			msg := Control{
+				Id:        id,
+				Value:     value,
+				Timestamp: time.Now(),
+			}
+			select {
+			case message <- msg:
+			case <-done:
+				return
+			}
+			go saveCounterState(moduleId, map[int]int{id: value})
+			time.Sleep(time.Minute * 5)
+		}
+	}
+}
+
+func connectWithRetry(serverAddr string) net.Conn {
+	for {
+		conn, err := net.Dial("tcp", serverAddr)
+		if err == nil {
+			log.Println("Подключено к серверу", serverAddr)
+			return conn
+		}
+		log.Printf("Ошибка подключения к %s: %v. Повтор через 5 минут...", serverAddr, err)
+		time.Sleep(1 * time.Minute)
+	}
+}
+
+func sendRegistration(conn net.Conn, moduleId int, devices []int) error {
+	list := ListDivases{
+		Id:      moduleId,
+		Text:    "Подключенные устройства",
+		Devices: devices,
+	}
+	l, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+	mes := Message{
+		Type: "registration",
+		Data: l,
+	}
+	str, err := json.Marshal(mes)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Write(append(str, '\n'))
+	return err
+}
+
+func run(moduleId int, devices []int, savedValues map[int]int, sigChan chan os.Signal) {
+	serverHost := os.Getenv("SERVER_HOST")
+	if serverHost == "" {
+		serverHost = "localhost"
+	}
+	serverPort := os.Getenv("SERVER_PORT")
+	if serverPort == "" {
+		serverPort = "8081"
+	}
+
+	for {
+		// Загружаем свежие сохранённые показатели
+		currentValues := loadCounterState(moduleId, devices)
+		for id, val := range savedValues {
+			if _, ok := currentValues[id]; !ok {
+				currentValues[id] = val
+			}
+		}
+
+		conn := connectWithRetry(serverHost + ":" + serverPort)
+		messageChan := make(chan Control, len(devices)*2+1)
+		doneChan := make(chan struct{})
+		disconnect := make(chan struct{})
+
+		if err := sendRegistration(conn, moduleId, devices); err != nil {
+			log.Printf("Ошибка регистрации: %v, переподключение...", err)
+			conn.Close()
+			time.Sleep(5 * time.Second)
 			continue
 		}
-		value += randomInt(100, 120)
-		msg := Control{
-			Id:        id,
-			Value:     value,
-			Timestamp: time.Now(),
+		log.Println("Регистрация на сервере выполнена")
+
+		go writeOnServer(conn, messageChan, doneChan, disconnect)
+		go readOnServer(conn, doneChan, disconnect)
+		for _, id := range devices {
+			go counter(id, moduleId, messageChan, currentValues[id], doneChan)
 		}
-		message <- msg
-		time.Sleep(time.Minute * 5)
+
+		select {
+		case <-sigChan:
+			log.Println("Получен сигнал завершения, закрываем соединения...")
+			close(doneChan)
+			close(messageChan)
+			conn.Close()
+			return
+		case <-disconnect:
+			log.Println("Соединение потеряно, переподключаемся...")
+			close(doneChan)
+			close(messageChan)
+			conn.Close()
+			time.Sleep(2 * time.Second)
+			continue
+		}
 	}
 }
 
 func main() {
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Println("Введите количество установленных счетчиков")
-	nStr, _ := reader.ReadString('\n')
-	n, _ := strconv.Atoi(strings.TrimSpace(nStr))
-
-	fmt.Println("Введите id счетчиков через пробел")
-	listIdStr, _ := reader.ReadString('\n')
+	numberStr := os.Getenv("COUNTER_NUMBER")
+	if numberStr == "" {
+		log.Fatal("Переменная окружения COUNTER_NUMBER не задана")
+	}
+	number, err := strconv.Atoi(strings.TrimSpace(numberStr))
+	if err != nil {
+		log.Fatalf("Неверный номер имитатора: %v", err)
+	}
+	listIdStr := os.Getenv("COUNTER_IDS")
+	if listIdStr == "" {
+		log.Fatal("Переменная окружения COUNTER_IDS не задана")
+	}
 	listId := strings.TrimSpace(listIdStr)
-
-	fmt.Println("Введите какой по счету вы запускаете имитатор")
-	numberStr, _ := reader.ReadString('\n')
-	number, _ := strconv.Atoi(strings.TrimSpace(numberStr))
 
 	ides, err := parseNumbers(listId)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	conn, err := net.Dial("tcp", "localhost:8081")
-	if err != nil {
-		log.Println(err)
-	}
-	defer conn.Close()
-
-	list := ListDivases{
-		Id:      getModuleID(number),
-		Text:    "Подключенные устройства",
-		Devices: ides,
-	}
-
-	l, err := json.Marshal(list)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	mes := Message{
-		Type: "registration",
-		Data: l,
-	}
-	str, e := json.Marshal(mes)
-	if e != nil {
-		log.Println(e)
-	}
-	_, err = conn.Write(append(str, '\n'))
-	if err != nil {
-		log.Printf("Ошибка записи: %v", err)
-	}
-
-	message := make(chan Control, n*2+1)
-	defer close(message)
-
-	go writeOnServer(conn, message)
-	go readOnServer(conn)
-	for i := 0; i < n; i++ {
-		go counter(ides[i], message)
-	}
+	moduleId := getModuleID(number)
+	savedValues := loadCounterState(moduleId, ides)
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigChan, syscall.SIGINT)
 
-	go func() {
-		<-sigChan
-		log.Println("Получен сигнал завершения, закрываем соединения...")
-		close(message)
-		conn.Close()
-		os.Exit(0)
-	}()
-
-	select {}
+	run(moduleId, ides, savedValues, sigChan)
 }

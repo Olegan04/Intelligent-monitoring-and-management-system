@@ -1,0 +1,5 @@
+*.exe
+*.exe~
+*.log
+*.state.json
+module*.id

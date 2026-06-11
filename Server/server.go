@@ -187,6 +187,7 @@ func adminOnly(next http.HandlerFunc) http.HandlerFunc {
 func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Разрешаем запросы с любого источника (для разработки)
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
@@ -270,7 +271,11 @@ func main() {
 	log.Println("База данных подключена")
 
 	go func() {
-		listener, err := net.Listen("tcp", "localhost:8081")
+		tcpPort := os.Getenv("TCP_PORT")
+		if tcpPort == "" {
+			tcpPort = "8081"
+		}
+		listener, err := net.Listen("tcp", "0.0.0.0:"+tcpPort)
 		if err != nil {
 			log.Println("ошибка запуска TCP сервера", err)
 			return

@@ -1,0 +1,111 @@
+services:
+  # База данных
+  db:
+    image: postgres:16-alpine
+    container_name: db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dataBase
+      POSTGRES_DB: Counters-IOT
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d Counters-IOT"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Бэкенд (Server)
+  server:
+    build: ./Server
+    container_name: server
+    ports:
+      - "8080:8080"   # HTTP API
+      - "8081:8081"   # TCP для счётчиков
+    environment:
+      DATABASE_URL: "postgres://postgres:dataBase@db:5432/Counters-IOT"
+      TCP_PORT: "8081"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Имитатор счётчика 1
+  counter1:
+    build: ./Issuer
+    container_name: counter1
+    environment:
+      SERVER_HOST: "server"
+      SERVER_PORT: "8081"
+      COUNTER_IDS: "908321 235908 123456"       
+      COUNTER_NUMBER: "1"    
+    volumes:
+      - counter1_data:/app        
+    depends_on:
+      - server
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Имитатор счётчика 2
+  counter2:
+    build: ./Issuer
+    container_name: counter2
+    environment:
+      SERVER_HOST: "server"
+      SERVER_PORT: "8081"
+      COUNTER_IDS: "243111 803214 903353 235431"   
+      COUNTER_NUMBER: "2"
+    volumes:
+      - counter2_data:/app
+    depends_on:
+      - server
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Имитатор счётчика 3
+  counter3:
+    build: ./Issuer
+    container_name: counter3
+    environment:
+      SERVER_HOST: "server"
+      SERVER_PORT: "8081"
+      COUNTER_IDS: "903233 803221 908702 123455"         
+      COUNTER_NUMBER: "3"
+    volumes:
+      - counter3_data:/app
+    depends_on:
+      - server
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Фронтенд (Client)
+  client:
+    build: ./Client
+    container_name: client
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  counter1_data:
+  counter2_data:
+  counter3_data:

@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -421,6 +422,15 @@ func (s *Storage) updateUserStatus(email string, status string) error {
 	_, err := s.pool.Exec(s.ctx, sql, email, status)
 	if err != nil {
 		return fmt.Errorf("ошибка обновления данных: %w", err)
+	}
+	return nil
+}
+
+func (s *Storage) updateCounterState(counterId int, state string) error {
+	sql := `UPDATE "Counters" SET state = $1 WHERE id = $2`
+	_, err := s.pool.Exec(s.ctx, sql, state, counterId)
+	if err != nil {
+		return fmt.Errorf("ошибка обновления статуса счётчика %d: %w", counterId, err)
 	}
 	return nil
 }
@@ -1150,10 +1160,20 @@ func (s *Storage) handleCommand(w http.ResponseWriter, r *http.Request) {
 	err = sendingCommand(command)
 	if err != nil {
 		http.Error(w, "Error command execution", http.StatusInternalServerError)
+		log.Printf("Ошибка отправки команды: %v", err)
 		err = s.updateCommandStatus("failed", id)
 		if err != nil {
 			log.Println("Ошибка обновления данных:", err)
 		}
+		return
+	}
+	err = s.updateCommandStatus("executed", id)
+	if err != nil {
+		http.Error(w, "Error command execution", http.StatusInternalServerError)
+	}
+	err = s.updateCounterState(command.IdCounter, command.Action)
+	if err != nil {
+		http.Error(w, "Error command execution", http.StatusInternalServerError)
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -1161,8 +1181,11 @@ func (s *Storage) handleCommand(w http.ResponseWriter, r *http.Request) {
 // Инициализация БД
 func initBD() (*Storage, error) {
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx,
-		"postgres://postgres:dataBase@localhost:5432/Counters-IOT")
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		databaseURL = "postgres://postgres:dataBase@localhost:5432/Counters-IOT"
+	}
+	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка подключения: %w", err)
 	}
