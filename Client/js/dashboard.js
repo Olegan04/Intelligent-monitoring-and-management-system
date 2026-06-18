@@ -8,6 +8,7 @@ let allCities = [];
 let allUserDevices = [];   
 let devicesForCurrentAddress = [];
 let selectedDevices = new Set();
+let statsChart = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (!authToken) {
@@ -36,12 +37,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const dateFrom = document.getElementById('dateFrom');
     const dateTo = document.getElementById('dateTo');
+    const from = document.getElementById('statFrom');
+    const to = document.getElementById('statTo');
+
     if (dateFrom) dateFrom.value = monthAgo.toISOString().split('T')[0];
     if (dateTo) dateTo.value = today.toISOString().split('T')[0];
-    
     if (dateFrom) dateFrom.addEventListener('change', handleDateChange);
     if (dateTo) dateTo.addEventListener('change', handleDateChange);
-    
+
+    if (from) from.value = monthAgo.toISOString().split('T')[0];
+    if (to) to.value = today.toISOString().split('T')[0];
+
     await loadUserAddresses();
     
     // Навигация
@@ -57,10 +63,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
             item.classList.add('active');
             document.getElementById(`${item.dataset.page}Page`).classList.add('active');
-            const titles = { dashboard: 'Дашборд', devices: 'Мои устройства', addresses: 'Мои адреса', admin: 'Администрирование' };
+            const titles = { dashboard: 'Дашборд', devices: 'Мои устройства', addresses: 'Мои адреса', statistics: 'Статистика', admin: 'Администрирование' };
             document.getElementById('pageTitle').textContent = titles[item.dataset.page] || 'Страница';
             if (item.dataset.page === 'devices') loadDevicesList();
             if (item.dataset.page === 'addresses') loadAddresses();
+            if (item.dataset.page === 'statistics') loadStatistics();
             if (item.dataset.page === 'admin' && currentUserRole === 'admin') {
                 loadAdminDevices();
                 loadUsersList();
@@ -95,7 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
     }
-    
+
     document.getElementById('logoutBtn')?.addEventListener('click', logout);
     document.getElementById('updateStats')?.addEventListener('click', handleDateChange);
     
@@ -1023,3 +1030,100 @@ function toggleSidebar() {
         sidebar.classList.toggle('open');
     }
 }
+
+// ========== СТАТИСТИКА ==========
+async function loadStatistics() {
+    const type = document.getElementById('statType').value;
+    const counterType = document.getElementById('counterType').value;
+    const from = document.getElementById('statFrom').value;
+    const to = document.getElementById('statTo').value;
+    const city = document.getElementById('statCity').value;
+    const street = document.getElementById('statStreet').value;
+    const house = document.getElementById('statHouse').value;
+
+    if (!from || !to) {
+        alert('Укажите период');
+        return;
+    }
+
+    let params = { from, to, type_counter: counterType };
+    if (city) params.city = city;
+    if (street) params.street = street;
+    if (house) params.house = house;
+
+    try {
+        let data;
+        if (type === 'country') {
+            data = await getUserStats('country', params);
+        } else if (type === 'city') {
+            data = await getUserStats('city', params);
+        } else if (type === 'street') {
+            data = await getUserStats('street', params);
+        } else if (type === 'house') {
+            data = await getUserStats('house', params);
+        }
+
+        const tbody = document.getElementById('statsTableBody');
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4">Нет данных</td></tr>';
+            updateStatsChart([]);
+            return;
+        }
+
+        tbody.innerHTML = data.map(item => `
+            <tr>
+                <td>${item.location || item.city || item.street || item.house || '-'}</td>
+                <td>${(item.average_value || 0).toFixed(2)}</td>
+            </tr>
+        `).join('');
+
+        updateStatsChart(data);
+    } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+        alert('Ошибка загрузки данных');
+    }
+}
+
+function updateStatsChart(data) {
+    const ctx = document.getElementById('statsChart')?.getContext('2d');
+    if (!ctx) return;
+    if (statsChart) statsChart.destroy();
+
+    const labels = data.map(item => item.location || item.city || item.street || item.house || '-');
+    const values = data.map(item => item.total_value || 0);
+
+    statsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Потребление',
+                data: values,
+                backgroundColor: '#667eea',
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, title: { display: true, text: 'Сумма' } }
+            }
+        }
+    });
+}
+
+document.getElementById('loadStatsBtn')?.addEventListener('click', loadStatistics);
+
+document.getElementById('statType')?.addEventListener('change', function() {
+    const type = this.value;
+    const showCity = (type === 'city' || type === 'street' || type === 'house');
+    const showStreet = (type === 'street' || type === 'house');
+    const showHouse = (type === 'house');
+    
+    document.getElementById('statCity').style.display = showCity ? 'inline-block' : 'none';
+    document.getElementById('statStreet').style.display = showStreet ? 'inline-block' : 'none';
+    document.getElementById('statHouse').style.display = showHouse ? 'inline-block' : 'none';
+});
+

@@ -29,6 +29,9 @@
                 <a href="#" class="nav-item" data-page="addresses">
                     <i class="fas fa-map-marker-alt"></i> <span>Мои адреса</span>
                 </a>
+                <a href="#" class="nav-item" data-page="statistics">
+                    <i class="fas fa-chart-simple"></i> <span>Статистика</span>
+                </a>
                 <a href="#" class="nav-item admin-only" data-page="admin" style="display: none;">
                     <i class="fas fa-shield-alt"></i> <span>Администрирование</span>
                 </a>
@@ -110,12 +113,55 @@
                 </div>
                 <div id="devicesList" class="devices-list"></div>
             </div>
-
+            
             <!-- Addresses Page -->
             <div id="addressesPage" class="page">
                 <div class="page-header"><h2>Мои адреса</h2><button id="addAddressBtn" class="btn-primary"><i class="fas fa-plus"></i> Добавить адрес</button></div>
                 <div id="addressesList" class="addresses-list"></div>
             </div>
+
+            <!-- Statistics Page -->
+            <div id="statisticsPage" class="page">
+                <div class="page-header">
+                    <h2>Аналитика потребления</h2>
+                </div>
+                <div class="stats-controls">
+                    <select id="statType">
+                        <option value="country">По городам</option>
+                        <option value="city">По улицам (в городе)</option>
+                        <option value="street">По домам (на улице)</option>
+                    </select>
+                    <select id="counterType">
+                        <option value="Электричество">Электричество</option>
+                        <option value="Горячая вода">Горячая вода</option>
+                        <option value="Холодная вода">Холодная вода</option>
+                        <option value="Тепло">Тепло</option>
+                        <option value="Газ">Газ</option>
+                    </select>
+                    <input type="text" id="statCity" placeholder="Город" style="display:none;">
+                    <input type="text" id="statStreet" placeholder="Улица" style="display:none;">
+                    <input type="text" id="statHouse" placeholder="Дом" style="display:none;">
+                    <input type="number" id="statCounterId" placeholder="ID счётчика" style="display:none;">
+                    <div class="date-range">
+                        <input type="date" id="statFrom">
+                        <span>—</span>
+                        <input type="date" id="statTo">
+                    </div>
+                    <button id="loadStatsBtn" class="btn-primary">Показать</button>
+                </div>
+                <div id="statsChartContainer">
+                    <canvas id="statsChart" height="300"></canvas>
+                </div>
+                <div id="statsTableContainer">
+                    <table class="stats-table">
+                        <thead>
+                            <tr><th>Название</th><th>Среднее</th></tr>
+                        </thead>
+                        <tbody id="statsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Admin Page (только для администратора) -->
             <div id="adminPage" class="page">
                 <div class="page-header">
