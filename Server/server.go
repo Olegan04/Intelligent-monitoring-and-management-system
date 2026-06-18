@@ -175,9 +175,9 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 func adminOnly(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		role := r.Context().Value("role").(string)
-		if role != "admin" {
-			http.Error(w, "Доступ запрещён", http.StatusForbidden)
+		role := r.Context().Value("status")
+		if role == nil || role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		next(w, r)
@@ -305,6 +305,7 @@ func main() {
 		serverMux.HandleFunc("/api/admin/devices", corsMiddleware(authMiddleware(adminOnly(s.handleAdminDevices))))
 		serverMux.HandleFunc("/api/admin/users", corsMiddleware(authMiddleware(adminOnly(s.handleAdminUsers))))
 		serverMux.HandleFunc("/api/user/command", corsMiddleware(authMiddleware(s.handleCommand)))
+		serverMux.HandleFunc("/api/user/info", corsMiddleware(authMiddleware(s.handleGetUserInfo)))
 
 		err := http.ListenAndServe(":8080", serverMux)
 		if err != nil {

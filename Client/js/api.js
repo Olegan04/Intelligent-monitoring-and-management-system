@@ -1,11 +1,10 @@
 // js/api.js
 
 // Конфигурация
-const API_BASE = 'http://localhost:8080';
+const API_BASE = '';
 let authToken = localStorage.getItem('token');
 
 // ========== ПУБЛИЧНЫЕ ЗАПРОСЫ ==========
-
 async function getCities() {
     const response = await fetch(`${API_BASE}/api/city`);
     if (!response.ok) throw new Error('Ошибка загрузки городов');
@@ -23,16 +22,13 @@ async function getPublicStats(type, typeCounter, params = {}) {
     if (params.from) url += `&from=${params.from}`;
     if (params.to) url += `&to=${params.to}`;
     if (params.city) url += `&city=${encodeURIComponent(params.city)}`;
-    
-    console.log('Запрос статистики:', url); // Для отладки
-    
+        
     const response = await fetch(url);
     if (!response.ok) throw new Error('Ошибка загрузки статистики');
     return response.json();
 }
 
 // ========== ЗАПРОСЫ С АВТОРИЗАЦИЕЙ ==========
-
 async function apiRequest(endpoint, method = 'GET', body = null, requiresAuth = true) {
     const headers = { 'Content-Type': 'application/json' };
     if (requiresAuth && authToken) {
@@ -64,6 +60,10 @@ async function apiRequest(endpoint, method = 'GET', body = null, requiresAuth = 
     return { success: response.ok };
 }
 
+async function getCurrentUser() {
+    return apiRequest('/api/user/info', 'GET');
+}
+
 async function getUserStats(type, params = {}) {
     let url = `/api/user/devices?type=${type}`;
     if (params.from) url += `&from=${params.from}`;
@@ -90,11 +90,11 @@ async function getAdminStats(type, params = {}) {
 }
 
 async function register(userData) {
-    return apiRequest('/api/auth/register', 'POST', userData, false);
+    return apiRequest('auth/register', 'POST', userData, false);
 }
 
 async function login(email, password) {
-    const data = await apiRequest(`/api/auth/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, 'POST', null, false);
+    const data = await apiRequest(`auth/login?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`, 'POST', null, false);
     if (data && data.token) {
         authToken = data.token;
         localStorage.setItem('token', authToken);
@@ -128,7 +128,6 @@ async function addAddress(address) {
             const errorText = await response.text();
             if (errorText) errorMessage = errorText;
         } catch (e) {
-            // игнорируем
         }
         throw new Error(errorMessage);
     }
@@ -141,13 +140,11 @@ async function getUserDevicesByAddressId(addressId) {
     return apiRequest(url, 'GET');
 }
 
-// Получить показания конкретного счётчика за период
 async function getCounterReadings(counterId, from, to) {
     const url = `/api/user/devices?type=counter&id_counter=${counterId}&from=${from}&to=${to}`;
     return apiRequest(url, 'GET');
 }
 
-// Получить статистику (уже есть getUserStats, но можно использовать напрямую)
 async function getUserStatistics(type, params = {}) {
     let url = `/api/user/devices?type=${type}`;
     if (params.from) url += `&from=${params.from}`;
@@ -170,7 +167,8 @@ async function sendCommand(command) {
 }
 
 async function getUsers(status) {
-    return apiRequest(`/api/admin/users?status=${status}`, 'GET');
+    const result = await apiRequest(`/api/admin/users?status=${status}`, 'GET');
+    return result || [];
 }
 
 async function updateUserStatus(email, status) {
@@ -187,4 +185,25 @@ function showMessage(elementId, message, isError = true) {
             el.textContent = '';
         }, 4000);
     }
+}
+
+async function getAllAddresses() {
+    return apiRequest('/api/admin/addresses', 'GET');
+}
+
+async function getAllDevices() {
+    return apiRequest('/api/admin/devices?type=list', 'GET');
+}
+
+async function addAdminDevice(device) {
+    return apiRequest('/api/admin/devices', 'POST', device);
+}
+
+async function getUsers(status) {
+    return apiRequest(`/api/admin/users?status=${status}`, 'GET');
+}
+
+async function updateUserStatus(email, status) {
+    const result = await apiRequest(`/api/admin/users?email=${encodeURIComponent(email)}&status=${status}`, 'POST');
+    return result;
 }

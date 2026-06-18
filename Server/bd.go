@@ -365,26 +365,25 @@ func (s *Storage) getUserByEmail(email string) (*Users, error) {
 
 func (s *Storage) getUsersByStatus(status string) ([]Users, error) {
 	sql := `
-		SELECT id, first_name, second_name, email
-		FROM "Users"
-		WHERE status = $1
-		ORDER BY id
-	`
+        SELECT id, first_name, second_name, email, status
+        FROM "Users"
+        WHERE status = $1
+        ORDER BY id
+    `
 	rows, err := s.pool.Query(s.ctx, sql, status)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка получения списка атдресов: %v", err)
+		return nil, fmt.Errorf("ошибка получения списка: %v", err)
 	}
 	defer rows.Close()
 
 	var users []Users
 	for rows.Next() {
 		var user Users
-		if err := rows.Scan(&user.Id, &user.FirstName, &user.SecondName, &user.Email); err != nil {
+		if err := rows.Scan(&user.Id, &user.FirstName, &user.SecondName, &user.Email, &user.Status); err != nil {
 			return nil, fmt.Errorf("ошибка сканирования: %w", err)
 		}
 		users = append(users, user)
 	}
-
 	return users, nil
 }
 
@@ -408,6 +407,76 @@ func (s *Storage) getListDevice(userId, addressId int) ([]UserDevice, error) {
 			continue
 		}
 		devices = append(devices, device)
+	}
+	return devices, nil
+}
+
+func (s *Storage) getAllUsers() ([]Users, error) {
+	sql := `SELECT id, first_name, second_name, email, status FROM "Users" ORDER BY id`
+	rows, err := s.pool.Query(s.ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []Users
+	for rows.Next() {
+		var user Users
+		if err := rows.Scan(&user.Id, &user.FirstName, &user.SecondName, &user.Email, &user.Status); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+func (s *Storage) getAllDevicesForAdmin() ([]map[string]interface{}, error) {
+	sql := `
+		SELECT 
+			c.id, c.type, c.state,
+			a.city, a.street, a.house, a.flat,
+			u.first_name, u.second_name
+		FROM "Counters" c
+		JOIN "Addresses" a ON c.id_address = a.id
+		LEFT JOIN "Users" u ON c.id_user = u.id
+		ORDER BY a.city, a.street, a.house, a.flat
+	`
+	rows, err := s.pool.Query(s.ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var devices []map[string]interface{}
+	for rows.Next() {
+		var (
+			id         int
+			devType    string
+			state      string
+			city       string
+			street     string
+			house      string
+			flat       int
+			firstName  *string
+			secondName *string
+		)
+		if err := rows.Scan(&id, &devType, &state, &city, &street, &house, &flat, &firstName, &secondName); err != nil {
+			return nil, err
+		}
+		ownerName := "не назначен"
+		if firstName != nil && secondName != nil {
+			ownerName = *firstName + " " + *secondName
+		}
+		devices = append(devices, map[string]interface{}{
+			"id":         id,
+			"type":       devType,
+			"state":      state,
+			"city":       city,
+			"street":     street,
+			"house":      house,
+			"flat":       flat,
+			"owner_name": ownerName,
+		})
 	}
 	return devices, nil
 }
@@ -669,9 +738,10 @@ func (s *Storage) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]string{
 		"token": token,
+		"role":  user.Status,
 	})
 }
 
@@ -688,7 +758,7 @@ func (s *Storage) handleGetCity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(cities)
 }
 
@@ -708,7 +778,7 @@ func (s *Storage) handleGetAddresses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(addr)
 }
 
@@ -765,7 +835,9 @@ func (s *Storage) handleAddAddress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func (s *Storage) handleGetAddressesByUser(w http.ResponseWriter, r *http.Request) {
@@ -788,7 +860,7 @@ func (s *Storage) handleGetAddressesByUser(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(addr)
 }
 
@@ -826,7 +898,7 @@ func (s *Storage) handleDeviceRequests(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
 
 	case "city":
@@ -837,7 +909,7 @@ func (s *Storage) handleDeviceRequests(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
 	default:
 		http.Error(w, "Invalid type parameter", http.StatusBadRequest)
@@ -884,7 +956,7 @@ func (s *Storage) handleDeviceRequestsByUser(w http.ResponseWriter, r *http.Requ
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(devices)
 		return
 	}
@@ -912,7 +984,7 @@ func (s *Storage) handleDeviceRequestsByUser(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(controls)
 
 	case "country":
@@ -923,7 +995,7 @@ func (s *Storage) handleDeviceRequestsByUser(w http.ResponseWriter, r *http.Requ
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
 
 	case "city":
@@ -935,7 +1007,7 @@ func (s *Storage) handleDeviceRequestsByUser(w http.ResponseWriter, r *http.Requ
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
 
 	case "street":
@@ -950,7 +1022,7 @@ func (s *Storage) handleDeviceRequestsByUser(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
 	default:
 		http.Error(w, "Invalid type parameter", http.StatusBadRequest)
@@ -965,6 +1037,19 @@ func (s *Storage) handleDeviceRequestsByAdmin(w http.ResponseWriter, r *http.Req
 
 	query := r.URL.Query()
 	typeParam := query.Get("type")
+
+	if typeParam == "list" {
+		devices, err := s.getAllDevicesForAdmin()
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		json.NewEncoder(w).Encode(devices)
+		return
+	}
+
 	from, to, err := s.parseDateParams(r)
 	if err != nil {
 		log.Println(err)
@@ -980,15 +1065,13 @@ func (s *Storage) handleDeviceRequestsByAdmin(w http.ResponseWriter, r *http.Req
 			http.Error(w, "Invalid data", http.StatusBadRequest)
 			return
 		}
-
 		controls, err := s.getCounterReadings(idCounter, from, to)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(controls)
 
 	case "country":
@@ -999,7 +1082,7 @@ func (s *Storage) handleDeviceRequestsByAdmin(w http.ResponseWriter, r *http.Req
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
 
 	case "city":
@@ -1011,22 +1094,20 @@ func (s *Storage) handleDeviceRequestsByAdmin(w http.ResponseWriter, r *http.Req
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
 
 	case "street":
 		typeCounter := query.Get("type_counter")
 		city := query.Get("city")
 		street := query.Get("street")
-
 		stats, err := s.getStreetStats(city, street, typeCounter, from, to)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
 
 	case "house":
@@ -1034,16 +1115,17 @@ func (s *Storage) handleDeviceRequestsByAdmin(w http.ResponseWriter, r *http.Req
 		city := query.Get("city")
 		street := query.Get("street")
 		house := query.Get("house")
-
 		stats, err := s.getHouseStats(city, street, house, typeCounter, from, to)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(stats)
+
+	default:
+		http.Error(w, "Invalid type parameter", http.StatusBadRequest)
 	}
 }
 
@@ -1067,6 +1149,19 @@ func (s *Storage) handleAddDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var exists bool
+	checkSql := `SELECT EXISTS(SELECT 1 FROM "Counters" WHERE id = $1)`
+	err = s.pool.QueryRow(s.ctx, checkSql, data.IdCounter).Scan(&exists)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if exists {
+		http.Error(w, "Counter with this ID already exists", http.StatusConflict)
+		return
+	}
+
 	err = s.writeCounter(data)
 	if err != nil {
 		log.Println(err)
@@ -1074,7 +1169,9 @@ func (s *Storage) handleAddDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func (s *Storage) handleAdminDevices(w http.ResponseWriter, r *http.Request) {
@@ -1100,7 +1197,7 @@ func (s *Storage) handleGetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(users)
 }
 
@@ -1115,14 +1212,30 @@ func (s *Storage) handleUpdateUserStatus(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func (s *Storage) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		query := r.URL.Query()
+		status := query.Get("status")
+		if status == "all" {
+			users, err := s.getAllUsers()
+			if err != nil {
+				log.Println(err)
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			json.NewEncoder(w).Encode(users)
+			return
+		}
+
 		s.handleGetUsers(w, r)
+
 	case http.MethodPost:
 		s.handleUpdateUserStatus(w, r)
 	default:
@@ -1175,7 +1288,35 @@ func (s *Storage) handleCommand(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Error command execution", http.StatusInternalServerError)
 	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Storage) handleGetUserInfo(w http.ResponseWriter, r *http.Request) {
+	userIDRaw := r.Context().Value("user_id")
+	if userIDRaw == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	userID, ok := userIDRaw.(int)
+	if !ok {
+		http.Error(w, "Invalid user ID", http.StatusInternalServerError)
+		return
+	}
+
+	var status string
+	err := s.pool.QueryRow(s.ctx, `SELECT status FROM "Users" WHERE id = $1`, userID).Scan(&status)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":   userID,
+		"role": status,
+	})
 }
 
 // Инициализация БД

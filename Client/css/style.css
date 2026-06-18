@@ -862,6 +862,9 @@ body {
     display: flex;
     flex-direction: column;
 }
+#consumptionChart {
+    max-height: 300px;
+}
 
 .chart-card canvas {
     max-height: 300px;
@@ -1238,4 +1241,111 @@ body {
     width: 100%;
     min-height: 450px;
     max-height: 600px;
+}
+
+/* Админ-панель */
+.admin-section {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.admin-section h3 {
+    margin-bottom: 15px;
+    color: #333;
+}
+.user-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+}
+.user-card:last-child {
+    border-bottom: none;
+}
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+.user-role {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.role-admin {
+    background: #ffebee;
+    color: #c62828;
+}
+.role-user {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+.user-email {
+    color: #666;
+    font-size: 14px;
+}
+.device-owner {
+    font-size: 12px;
+    color: #888;
+    margin-left: 10px;
+}
+.admin-only {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s;
+        z-index: 200;
+        width: 280px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        overflow-y: auto;
+        background: white;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0;
+        padding: 15px;
+    }
+     .main-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 15px;
+    }
+
+    .main-header h1 {
+        font-size: 18px;
+        margin: 0;
+        white-space: nowrap;
+    }
+    .mobile-menu-btn {
+        display: block;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #667eea;
+        padding: 5px;
+        flex-shrink: 0;
+    }
+    .hero {
+        flex-direction: column;
+        text-align: center;
+    }
+    .hero-buttons {
+        justify-content: center;
+    }
 }

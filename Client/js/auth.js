@@ -1,17 +1,14 @@
 // js/auth.js
 
 document.addEventListener('DOMContentLoaded', () => {
-    // ТОЛЬКО для страницы dashboard.html проверяем токен
     if (window.location.pathname.includes('dashboard.html')) {
         if (!authToken) {
             window.location.href = 'index.html';
             return;
         }
-        return; // На дашборде не ищем формы входа
+        return;
     }
-    
-    // ========== КОД НИЖЕ ВЫПОЛНЯЕТСЯ ТОЛЬКО НА index.html ==========
-    
+        
     // Переключение табов
     const loginTab = document.getElementById('loginTab');
     const registerTab = document.getElementById('registerTab');
@@ -116,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const data = await response.json();
                     if (data.token) {
                         localStorage.setItem('token', data.token);
+                        if (data.role) localStorage.setItem('role', data.role);
                         window.location.href = 'dashboard.html';
                     } else {
                         showMessage('authMessage', 'Неверный ответ сервера', true);

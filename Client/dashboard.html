@@ -29,6 +29,9 @@
                 <a href="#" class="nav-item" data-page="addresses">
                     <i class="fas fa-map-marker-alt"></i> <span>Мои адреса</span>
                 </a>
+                <a href="#" class="nav-item admin-only" data-page="admin" style="display: none;">
+                    <i class="fas fa-shield-alt"></i> <span>Администрирование</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
                 <div class="user-info">
@@ -47,6 +50,9 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="main-header">
+                <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <h1 id="pageTitle">Дашборд</h1>
                 <div class="header-actions">
                     <div class="date-range">
@@ -110,11 +116,56 @@
                 <div class="page-header"><h2>Мои адреса</h2><button id="addAddressBtn" class="btn-primary"><i class="fas fa-plus"></i> Добавить адрес</button></div>
                 <div id="addressesList" class="addresses-list"></div>
             </div>
+            <!-- Admin Page (только для администратора) -->
+            <div id="adminPage" class="page">
+                <div class="page-header">
+                    <h2>Администрирование</h2>
+                    <button id="addAdminDeviceBtn" class="btn-primary admin-only" style="display: none;">
+                        <i class="fas fa-plus"></i> Добавить счётчик
+                    </button>
+                </div>
+                
+                <div class="admin-section">
+                    <h3>📊 Все счётчики</h3>
+                    <div id="adminDevicesList" class="devices-list"></div>
+                </div>
+                
+                <div class="admin-section">
+                    <h3>👥 Пользователи</h3>
+                    <select id="userStatusFilter">
+                        <option value="all">Все пользователи</option>
+                        <option value="user">Обычные пользователи</option>
+                        <option value="admin">Администраторы</option>
+                    </select>
+                    <button id="loadUsersBtn" class="btn-secondary">Загрузить</button>
+                    <div id="usersList" class="users-list"></div>
+                </div>
+            </div>
         </main>
     </div>
 
     <!-- Модальные окна -->
-    <div id="deviceModal" class="modal"><div class="modal-content"><span class="close">&times;</span><h3>Добавить устройство</h3><form id="addDeviceForm"><div class="form-group"><label>ID счётчика</label><input type="number" name="id_counter" required></div><div class="form-group"><label>Тип</label><select name="type"><option value="Электричество">Электричество</option><option value="Горячая вода">Горячая вода</option><option value="Холодная вода">Холодная вода</option><option value="Тепло">Тепло</option></select></div><div class="form-group"><label>Дата установки</label><input type="date" name="duration" required></div><div class="form-group"><label>Город</label><input type="text" name="city" required></div><div class="form-group"><label>Улица</label><input type="text" name="street" required></div><div class="form-group"><label>Дом</label><input type="text" name="house" required></div><div class="form-group"><label>Квартира</label><input type="number" name="flat" required></div><button type="submit" class="btn-primary">Сохранить</button></form></div></div>
+    <div id="deviceModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span><h3>Добавить устройство</h3>
+            <form id="addDeviceForm">
+                <div class="form-group"><label>ID счётчика</label><input type="number" name="id_counter" required></div>
+                <div class="form-group"><label>Тип</label><select name="type">
+                    <option value="Электричество">Электричество</option>
+                    <option value="Горячая вода">Горячая вода</option>
+                    <option value="Холодная вода">Холодная вода</option>
+                    <option value="Тепло">Тепло</option>
+                    <option value="Тепло">Газ</option></select>
+                </div>
+                <div class="form-group"><label>Дата установки</label><input type="date" name="duration" required></div>
+                <div class="form-group"><label>Город</label><input type="text" name="city" required></div>
+                <div class="form-group"><label>Улица</label><input type="text" name="street" required></div>
+                <div class="form-group"><label>Дом</label><input type="text" name="house" required></div>
+                <div class="form-group"><label>Квартира</label><input type="number" name="flat" required></div>
+                <button type="button" id="saveDeviceBtn" class="btn-primary" onclick="saveDevice()">Сохранить</button>
+            </form>
+        </div>
+    </div>
 
     <div id="addressModal" class="modal">
         <div class="modal-content">
@@ -202,12 +253,6 @@
             <canvas id="compareDevicesChart" style="max-height: 800px; width: 100%;"></canvas>
         </div>
     </div>
-
-    <!-- Кнопка для открытия модального окна (добавьте на дашборд, например, рядом с выбором адреса) -->
-    <button id="openCompareAddressesBtn" class="btn-secondary" style="margin-left: 10px;">
-        <i class="fas fa-chart-line"></i> Сравнить адреса
-    </button>
-
     <script src="js/api.js"></script>
     <script src="js/dashboard.js"></script>
 </body>

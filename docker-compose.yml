@@ -88,6 +88,70 @@ services:
       - app-network
     restart: unless-stopped
 
+  counter4:
+    build: ./Issuer
+    container_name: counter4
+    environment:
+      SERVER_HOST: "server"
+      SERVER_PORT: "8081"
+      COUNTER_IDS: "111111 211111 311111"         
+      COUNTER_NUMBER: "4"
+    volumes:
+      - counter4_data:/app
+    depends_on:
+      - server
+    networks:
+      - app-network
+    restart: unless-stopped
+  
+  counter5:
+    build: ./Issuer
+    container_name: counter5
+    environment:
+      SERVER_HOST: "server"
+      SERVER_PORT: "8081"
+      COUNTER_IDS: "111112 211112 311112"         
+      COUNTER_NUMBER: "5"
+    volumes:
+      - counter5_data:/app
+    depends_on:
+      - server
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  counter6:
+    build: ./Issuer
+    container_name: counter6
+    environment:
+      SERVER_HOST: "server"
+      SERVER_PORT: "8081"
+      COUNTER_IDS: "111113 211113 311113"         
+      COUNTER_NUMBER: "6"
+    volumes:
+      - counter6_data:/app
+    depends_on:
+      - server
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  counter7:
+    build: ./Issuer
+    container_name: counter7
+    environment:
+      SERVER_HOST: "server"
+      SERVER_PORT: "8081"
+      COUNTER_IDS: "992456 992451 997631 999234 992413 996512 995565 994137"         
+      COUNTER_NUMBER: "7"
+    volumes:
+      - counter7_data:/app
+    depends_on:
+      - server
+    networks:
+      - app-network
+    restart: unless-stopped
+
   # Фронтенд (Client)
   client:
     build: ./Client
@@ -109,3 +173,7 @@ volumes:
   counter1_data:
   counter2_data:
   counter3_data:
+  counter4_data:
+  counter5_data:
+  counter6_data:
+  counter7_data:

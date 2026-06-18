@@ -49,8 +49,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Мобильное меню
     const mobileBtn = document.getElementById('mobileMenuBtn');
     const navLinks = document.querySelector('.nav-links');
+
     if (mobileBtn && navLinks) {
-        mobileBtn.addEventListener('click', () => navLinks.classList.toggle('active'));
+        // Открыть/закрыть по клику на бургер
+        mobileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            navLinks.classList.toggle('active');
+        });
+
+        // Закрыть меню при клике на пункт меню
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    navLinks.classList.remove('active');
+                }
+            });
+        });
+
+        // Закрыть меню при клике вне его
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768) {
+                const isClickInsideNav = navLinks.contains(e.target);
+                const isClickOnBurger = mobileBtn.contains(e.target);
+                if (!isClickInsideNav && !isClickOnBurger) {
+                    navLinks.classList.remove('active');
+                }
+            }
+        });
     }
 });
 
